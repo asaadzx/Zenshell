@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,9 +23,12 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Test
+        run: go test -v -count=1 ./...
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

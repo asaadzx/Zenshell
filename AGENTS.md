@@ -167,6 +167,11 @@ plugins/                     — Lua plugin scripts
 | `where <condition...>` | Filter rows by conditions (`"age > 30"`) |
 | `sort-by <field> [--desc]` | Sort rows by a field |
 | `select <column...>` | Keep only specified columns |
+| `first [n]` | Show first n rows (default 10) |
+| `last [n]` | Show last n rows (default 10) |
+| `count [field...]` | Count rows, or count by groups |
+| `uniq [field...]` | Show unique rows |
+| `confirm [message]` | Prompt yes/no, exits 0 for yes |
 
 ### Pipeline files
 - `internal/shell/pipeline.go` — `command` struct with `isData` flag, data handlers, `execDataPipeline`

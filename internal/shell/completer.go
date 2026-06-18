@@ -8,15 +8,17 @@ import (
 	"sync"
 )
 
-// PATH cache — scanned once at startup
+// PATH cache — rebuilt when $PATH changes
 var (
-	pathCache   []string
-	pathCacheMu sync.Once
+	pathCache    []string
+	pathCacheVal string
+	pathCacheMu  sync.Mutex
 )
 
 func buildPathCache() {
 	dirs := filepath.SplitList(os.Getenv("PATH"))
 	seen := make(map[string]bool)
+	pathCache = nil
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -36,8 +38,18 @@ func buildPathCache() {
 	sort.Strings(pathCache)
 }
 
+func ensurePathCache() {
+	cur := os.Getenv("PATH")
+	pathCacheMu.Lock()
+	defer pathCacheMu.Unlock()
+	if cur != pathCacheVal {
+		pathCacheVal = cur
+		buildPathCache()
+	}
+}
+
 func (s *Shell) Do(line []rune, pos int) ([][]rune, int) {
-	pathCacheMu.Do(buildPathCache)
+	ensurePathCache()
 
 	input := string(line[:pos])
 	words := strings.Fields(input)

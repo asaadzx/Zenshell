@@ -16,13 +16,14 @@ import (
 )
 
 type Shell struct {
-	home     string
-	cfg      *config.Config
-	plugins  *plugins.Manager
-	user     string
-	host     string
+	home        string
+	cfg         *config.Config
+	plugins     *plugins.Manager
+	user        string
+	host        string
 	promptColor string
-	lastExit int
+	lastExit    int
+	aliases     map[string]string
 }
 
 func New() (*Shell, error) {
@@ -41,9 +42,10 @@ func New() (*Shell, error) {
 	}
 
 	s := &Shell{
-		home: home,
-		user: user,
-		host: host,
+		home:    home,
+		user:    user,
+		host:    host,
+		aliases: make(map[string]string),
 	}
 
 	// Init config dirs
@@ -112,6 +114,16 @@ func (s *Shell) Run() int {
 			break
 		}
 
+		// Multi-line continuation for unclosed quotes / trailing backslash
+		for needsContinuation(line) {
+			rl.SetPrompt("> ")
+			cont, err := rl.Readline()
+			if err != nil {
+				break
+			}
+			line += "\n" + cont
+		}
+
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -152,6 +164,11 @@ func (s *Shell) execute(args []string) {
 		return
 	}
 
+	args = s.expandAliases(args)
+	if len(args) == 0 {
+		return
+	}
+
 	groups := parseGroups(args)
 	var skip bool
 
@@ -183,6 +200,46 @@ func (s *Shell) execute(args []string) {
 	}
 
 	s.plugins.SetExitCode(s.lastExit)
+}
+
+// isOperator returns true if tok is a shell operator (not a command name).
+func isOperator(tok string) bool {
+	switch tok {
+	case ";", "&&", "||", "&", "|":
+		return true
+	}
+	return false
+}
+
+var builtinNames = map[string]bool{
+	"cd": true, "exit": true, "quit": true, "echo": true,
+	"pwd": true, "type": true, "export": true, "unset": true,
+	"history": true, "help": true, "alias": true, "unalias": true,
+	"confirm": true,
+	"from-json": true, "from-csv": true, "to-json": true, "to-csv": true,
+	"where": true, "sort-by": true, "select": true,
+	"first": true, "last": true, "count": true, "uniq": true,
+}
+
+func (s *Shell) expandAliases(tokens []string) []string {
+	if len(s.aliases) == 0 {
+		return tokens
+	}
+
+	result := make([]string, 0, len(tokens))
+	for i, tok := range tokens {
+		if i == 0 || isOperator(tokens[i-1]) {
+			if expanded, ok := s.aliases[tok]; ok {
+				sub := tokenize(expanded)
+				if len(sub) > 0 {
+					result = append(result, sub...)
+				}
+				continue
+			}
+		}
+		result = append(result, tok)
+	}
+	return result
 }
 
 func parseGroups(tokens []string) []segGroup {
@@ -234,5 +291,5 @@ func (s *Shell) generatePrompt() string {
 	pwd, _ := os.Getwd()
 	pwd = strings.Replace(pwd, s.home, "~", 1)
 
-	return prompt.Format(s.cfg.Theme.PromptFormat, s.user, s.host, pwd, s.promptColor)
+	return prompt.Format(s.cfg.Theme.PromptFormat, s.user, s.host, pwd, s.promptColor, s.lastExit)
 }

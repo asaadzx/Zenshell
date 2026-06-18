@@ -50,7 +50,7 @@ func tokenize(input string) []string {
 	for i < len(input) {
 		ch := input[i]
 
-		if ch == ' ' || ch == '\t' {
+		if ch == ' ' || ch == '\t' || ch == '\n' {
 			flush()
 			i++
 			continue
@@ -154,4 +154,35 @@ func expandVar(input string, i *int) string {
 
 func isAlphaNum(ch byte) bool {
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
+}
+
+// needsContinuation checks if the line has unclosed quotes or a continuation char.
+func needsContinuation(line string) bool {
+	// Check for trailing unescaped backslash
+	if strings.HasSuffix(line, "\\") && !strings.HasSuffix(line, "\\\\") {
+		return true
+	}
+
+	inSingle := false
+	inDouble := false
+	escaped := false
+	for _, ch := range line {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if ch == '\\' && inDouble {
+			escaped = true
+			continue
+		}
+		if ch == '\'' && !inDouble {
+			inSingle = !inSingle
+			continue
+		}
+		if ch == '"' && !inSingle {
+			inDouble = !inDouble
+			continue
+		}
+	}
+	return inSingle || inDouble
 }

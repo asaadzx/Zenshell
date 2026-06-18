@@ -260,7 +260,11 @@ func TestIsOperator(t *testing.T) {
 }
 
 func TestBuiltinsMap(t *testing.T) {
-	expected := []string{"cd", "exit", "quit", "echo", "pwd", "type", "export", "unset", "history", "help", "alias", "unalias", "from-json", "from-csv", "to-json", "to-csv", "where", "sort-by", "select"}
+	expected := []string{"cd", "exit", "quit", "echo", "pwd", "type", "export", "unset",
+		"history", "help", "alias", "unalias", "confirm",
+		"from-json", "from-csv", "to-json", "to-csv",
+		"where", "sort-by", "select",
+		"first", "last", "count", "uniq"}
 	for _, name := range expected {
 		if _, ok := builtins[name]; !ok {
 			t.Errorf("builtins map missing %q", name)
@@ -440,6 +444,102 @@ func TestParseCommandDataFlagCase(t *testing.T) {
 		cmd := parseCommand([]string{name, "arg"})
 		if !cmd.isData {
 			t.Errorf("expected isData=true for %s", name)
+		}
+	}
+}
+
+func TestHandleFirst(t *testing.T) {
+	s := &Shell{}
+	input := `[{"n":1},{"n":2},{"n":3}]`
+	stdin := strings.NewReader(input)
+	out, code := s.handleFirst([]string{"2"}, stdin)
+	if code != 0 {
+		t.Fatalf("handleFirst exit code %d", code)
+	}
+	if out == "" {
+		t.Fatal("expected non-empty output")
+	}
+}
+
+func TestHandleLast(t *testing.T) {
+	s := &Shell{}
+	input := `[{"n":1},{"n":2},{"n":3}]`
+	stdin := strings.NewReader(input)
+	out, code := s.handleLast([]string{"2"}, stdin)
+	if code != 0 {
+		t.Fatalf("handleLast exit code %d", code)
+	}
+	if out == "" {
+		t.Fatal("expected non-empty output")
+	}
+}
+
+func TestHandleCount(t *testing.T) {
+	s := &Shell{}
+	input := `[{"n":1},{"n":2},{"n":3}]`
+	stdin := strings.NewReader(input)
+	out, code := s.handleCount(nil, stdin)
+	if code != 0 {
+		t.Fatalf("handleCount exit code %d", code)
+	}
+	if out == "" {
+		t.Fatal("expected non-empty output")
+	}
+}
+
+func TestHandleCountGroupBy(t *testing.T) {
+	s := &Shell{}
+	input := `[{"city":"nyc","name":"a"},{"city":"nyc","name":"b"},{"city":"sf","name":"c"}]`
+	stdin := strings.NewReader(input)
+	out, code := s.handleCount([]string{"city"}, stdin)
+	if code != 0 {
+		t.Fatalf("handleCount exit code %d", code)
+	}
+	if out == "" {
+		t.Fatal("expected non-empty output")
+	}
+}
+
+func TestHandleUniq(t *testing.T) {
+	s := &Shell{}
+	input := `[{"name":"alice"},{"name":"bob"},{"name":"alice"}]`
+	stdin := strings.NewReader(input)
+	out, code := s.handleUniq([]string{"name"}, stdin)
+	if code != 0 {
+		t.Fatalf("handleUniq exit code %d", code)
+	}
+	if out == "" {
+		t.Fatal("expected non-empty output")
+	}
+}
+
+func TestHandleFirstDefault(t *testing.T) {
+	s := &Shell{}
+	input := `[{"n":1},{"n":2},{"n":3},{"n":4},{"n":5},{"n":6},{"n":7},{"n":8},{"n":9},{"n":10},{"n":11}]`
+	stdin := strings.NewReader(input)
+	out, code := s.handleFirst(nil, stdin)
+	if code != 0 {
+		t.Fatalf("handleFirst exit code %d", code)
+	}
+	if out == "" {
+		t.Fatal("expected non-empty output")
+	}
+}
+
+func TestIsDataBuiltinNew(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{"first", true},
+		{"last", true},
+		{"count", true},
+		{"uniq", true},
+		{"confirm", false},
+	}
+	for _, tt := range tests {
+		if got := isDataBuiltin(tt.name); got != tt.want {
+			t.Errorf("isDataBuiltin(%q) = %v, want %v", tt.name, got, tt.want)
 		}
 	}
 }

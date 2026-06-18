@@ -3,9 +3,11 @@
 -- List of active plugins
 plugins = {
     "aquia-prompt.lua",
-    "autosuggest.lua",
-    "syntax-highlighting.lua",
-    "git-prompt.lua"
+    "git-prompt.lua",
+    "venv-prompt.lua",
+    "node-version.lua",
+    "todo.lua",
+    "quote.lua",
 }
 
 -- Theme settings

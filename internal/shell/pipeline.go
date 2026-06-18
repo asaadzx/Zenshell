@@ -29,7 +29,8 @@ type command struct {
 // isDataBuiltin returns true if name is a structured data command.
 func isDataBuiltin(name string) bool {
 	switch name {
-	case "where", "sort-by", "select", "from-json", "from-csv", "to-json", "to-csv":
+	case "where", "sort-by", "select", "from-json", "from-csv", "to-json", "to-csv",
+		"first", "last", "count", "uniq", "sum", "avg", "min", "max":
 		return true
 	}
 	return false
@@ -52,6 +53,14 @@ func (s *Shell) getDataFn(name string) func(args []string, stdin io.Reader) (str
 		return s.handleSortBy
 	case "select":
 		return s.handleSelect
+	case "first":
+		return s.handleFirst
+	case "last":
+		return s.handleLast
+	case "count":
+		return s.handleCount
+	case "uniq":
+		return s.handleUniq
 	}
 	return nil
 }
@@ -259,6 +268,109 @@ func (s *Shell) handleSelect(args []string, stdin io.Reader) (string, int) {
 	json, err := result.ToJSON()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "select: %v\n", err)
+		return "", 1
+	}
+	return json, 0
+}
+
+func (s *Shell) handleFirst(args []string, stdin io.Reader) (string, int) {
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "first: %v\n", err)
+		return "", 1
+	}
+	tbl, err := data.FromJSON(string(b))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "first: %v\n", err)
+		return "", 1
+	}
+
+	n := 10 // default
+	if len(args) > 0 {
+		if v, err := strconv.Atoi(args[0]); err == nil && v > 0 {
+			n = v
+		}
+	}
+	result := tbl.First(n)
+	json, err := result.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "first: %v\n", err)
+		return "", 1
+	}
+	return json, 0
+}
+
+func (s *Shell) handleLast(args []string, stdin io.Reader) (string, int) {
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "last: %v\n", err)
+		return "", 1
+	}
+	tbl, err := data.FromJSON(string(b))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "last: %v\n", err)
+		return "", 1
+	}
+
+	n := 10
+	if len(args) > 0 {
+		if v, err := strconv.Atoi(args[0]); err == nil && v > 0 {
+			n = v
+		}
+	}
+	result := tbl.Last(n)
+	json, err := result.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "last: %v\n", err)
+		return "", 1
+	}
+	return json, 0
+}
+
+func (s *Shell) handleCount(args []string, stdin io.Reader) (string, int) {
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "count: %v\n", err)
+		return "", 1
+	}
+	tbl, err := data.FromJSON(string(b))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "count: %v\n", err)
+		return "", 1
+	}
+
+	// If field args given, do group-by count
+	if len(args) > 0 {
+		result := tbl.GroupBy(args)
+		json, err := result.ToJSON()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "count: %v\n", err)
+			return "", 1
+		}
+		return json, 0
+	}
+
+	// Simple count
+	out := fmt.Sprintf(`[{"count": %d}]`, len(tbl.Rows))
+	return out, 0
+}
+
+func (s *Shell) handleUniq(args []string, stdin io.Reader) (string, int) {
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "uniq: %v\n", err)
+		return "", 1
+	}
+	tbl, err := data.FromJSON(string(b))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "uniq: %v\n", err)
+		return "", 1
+	}
+
+	result := tbl.Unique(args)
+	json, err := result.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "uniq: %v\n", err)
 		return "", 1
 	}
 	return json, 0
@@ -637,7 +749,9 @@ func (s *Shell) execCommand(cmd command) int {
 		return s.execAlias(cmd.args[1:])
 	case "unalias":
 		return s.execUnalias(cmd.args[1:])
-	case "from-json", "from-csv", "to-json", "to-csv", "where", "sort-by", "select":
+	case "confirm":
+		return s.execConfirm(cmd.args[1:])
+	case "from-json", "from-csv", "to-json", "to-csv", "where", "sort-by", "select", "first", "last", "count", "uniq":
 		fn := s.getDataFn(cmd.args[0])
 		if fn == nil {
 			fmt.Fprintf(os.Stderr, "%s: internal error\n", cmd.args[0])
@@ -658,18 +772,19 @@ func (s *Shell) execCommand(cmd command) int {
 }
 
 var builtins = map[string]string{
-	"cd":       "change the current directory",
-	"exit":     "exit the shell",
-	"quit":     "exit the shell",
-	"echo":     "display a line of text",
-	"pwd":      "print the current working directory",
-	"type":     "display information about command type",
-	"export":   "set an environment variable",
-	"unset":    "unset an environment variable",
-	"history":  "display or clear the command history",
-	"help":     "display information about built-in commands",
-	"alias":    "define or display aliases",
-	"unalias":  "remove alias definitions",
+	"cd":        "change the current directory",
+	"exit":      "exit the shell",
+	"quit":      "exit the shell",
+	"echo":      "display a line of text",
+	"pwd":       "print the current working directory",
+	"type":      "display information about command type",
+	"export":    "set an environment variable",
+	"unset":     "unset an environment variable",
+	"history":   "display or clear the command history",
+	"help":      "display information about built-in commands",
+	"alias":     "define or display aliases",
+	"unalias":   "remove alias definitions",
+	"confirm":   "prompt for confirmation, exits 0 for yes, 1 otherwise",
 	"from-json": "parse JSON into structured data",
 	"from-csv":  "parse CSV into structured data",
 	"to-json":   "convert structured data to JSON",
@@ -677,6 +792,10 @@ var builtins = map[string]string{
 	"where":     "filter structured data rows by conditions",
 	"sort-by":   "sort structured data by a field",
 	"select":    "select specific columns from structured data",
+	"first":     "show first N rows (default 10)",
+	"last":      "show last N rows (default 10)",
+	"count":     "count rows, or count by groups with `count field`",
+	"uniq":      "show unique rows",
 }
 
 func (s *Shell) execCD(args []string) int {
@@ -870,6 +989,21 @@ func (s *Shell) execUnalias(args []string) int {
 		delete(s.aliases, a)
 	}
 	return 0
+}
+
+func (s *Shell) execConfirm(args []string) int {
+	msg := "Are you sure?"
+	if len(args) > 0 {
+		msg = strings.Join(args, " ")
+	}
+	fmt.Printf("%s [y/N] ", msg)
+	var answer string
+	fmt.Scanln(&answer)
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	if answer == "y" || answer == "yes" {
+		return 0
+	}
+	return 1
 }
 
 func (s *Shell) buildCmd(cmd command) *exec.Cmd {

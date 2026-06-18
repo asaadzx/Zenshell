@@ -211,3 +211,195 @@ func TestTableDisplay(t *testing.T) {
 		t.Errorf("expected 3 rows")
 	}
 }
+
+func TestFirst(t *testing.T) {
+	tbl := makeTestTable()
+	r := tbl.First(2)
+	if len(r.Rows) != 2 {
+		t.Errorf("expected 2 rows, got %d", len(r.Rows))
+	}
+	if name, ok := r.Rows[0].Fields["name"]; !ok || name.String() != "alice" {
+		t.Errorf("expected first row alice, got %v", name)
+	}
+}
+
+func TestFirstZero(t *testing.T) {
+	tbl := makeTestTable()
+	r := tbl.First(0)
+	if len(r.Rows) != 0 {
+		t.Errorf("expected 0 rows, got %d", len(r.Rows))
+	}
+}
+
+func TestFirstExceedsLength(t *testing.T) {
+	tbl := makeTestTable()
+	r := tbl.First(100)
+	if len(r.Rows) != 3 {
+		t.Errorf("expected 3 rows, got %d", len(r.Rows))
+	}
+}
+
+func TestLast(t *testing.T) {
+	tbl := makeTestTable()
+	r := tbl.Last(2)
+	if len(r.Rows) != 2 {
+		t.Errorf("expected 2 rows, got %d", len(r.Rows))
+	}
+	if name, ok := r.Rows[0].Fields["name"]; !ok || name.String() != "bob" {
+		t.Errorf("expected first row bob, got %v", name)
+	}
+}
+
+func TestLastZero(t *testing.T) {
+	tbl := makeTestTable()
+	r := tbl.Last(0)
+	if len(r.Rows) != 0 {
+		t.Errorf("expected 0 rows, got %d", len(r.Rows))
+	}
+}
+
+func TestUnique(t *testing.T) {
+	tbl := TableValue{
+		Columns: []string{"name", "city"},
+		Rows: []RecordValue{
+			{Fields: map[string]Value{"name": StringValue{"alice"}, "city": StringValue{"nyc"}}},
+			{Fields: map[string]Value{"name": StringValue{"bob"}, "city": StringValue{"sf"}}},
+			{Fields: map[string]Value{"name": StringValue{"alice"}, "city": StringValue{"nyc"}}},
+		},
+	}
+	r := tbl.Unique([]string{"name", "city"})
+	if len(r.Rows) != 2 {
+		t.Errorf("expected 2 unique rows, got %d", len(r.Rows))
+	}
+}
+
+func TestUniqueField(t *testing.T) {
+	tbl := TableValue{
+		Columns: []string{"name", "city"},
+		Rows: []RecordValue{
+			{Fields: map[string]Value{"name": StringValue{"alice"}, "city": StringValue{"nyc"}}},
+			{Fields: map[string]Value{"name": StringValue{"bob"}, "city": StringValue{"nyc"}}},
+			{Fields: map[string]Value{"name": StringValue{"charlie"}, "city": StringValue{"nyc"}}},
+		},
+	}
+	r := tbl.Unique([]string{"city"})
+	if len(r.Rows) != 1 {
+		t.Errorf("expected 1 unique city, got %d", len(r.Rows))
+	}
+}
+
+func TestGroupBy(t *testing.T) {
+	tbl := makeTestTable()
+	r := tbl.GroupBy([]string{"city"})
+	if len(r.Rows) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(r.Rows))
+	}
+	foundNYC := false
+	foundSF := false
+	for _, row := range r.Rows {
+		city, _ := row.Fields["city"]
+		count, _ := row.Fields["count"]
+		if city.String() == "nyc" {
+			foundNYC = true
+			if count.String() != "2" {
+				t.Errorf("expected nyc count 2, got %s", count.String())
+			}
+		}
+		if city.String() == "sf" {
+			foundSF = true
+			if count.String() != "1" {
+				t.Errorf("expected sf count 1, got %s", count.String())
+			}
+		}
+	}
+	if !foundNYC || !foundSF {
+		t.Errorf("missing groups: nyc=%v sf=%v", foundNYC, foundSF)
+	}
+}
+
+func TestAggregateSum(t *testing.T) {
+	tbl := makeTestTable()
+	val, err := tbl.Aggregate("age", "sum")
+	if err != nil {
+		t.Fatalf("sum error: %v", err)
+	}
+	if val.String() != "90" {
+		t.Errorf("expected sum 90, got %s", val.String())
+	}
+}
+
+func TestAggregateAvg(t *testing.T) {
+	tbl := makeTestTable()
+	val, err := tbl.Aggregate("age", "avg")
+	if err != nil {
+		t.Fatalf("avg error: %v", err)
+	}
+	if val.String() != "30" {
+		t.Errorf("expected avg 30, got %s", val.String())
+	}
+}
+
+func TestAggregateMin(t *testing.T) {
+	tbl := makeTestTable()
+	val, err := tbl.Aggregate("age", "min")
+	if err != nil {
+		t.Fatalf("min error: %v", err)
+	}
+	if val.String() != "25" {
+		t.Errorf("expected min 25, got %s", val.String())
+	}
+}
+
+func TestAggregateMax(t *testing.T) {
+	tbl := makeTestTable()
+	val, err := tbl.Aggregate("age", "max")
+	if err != nil {
+		t.Fatalf("max error: %v", err)
+	}
+	if val.String() != "35" {
+		t.Errorf("expected max 35, got %s", val.String())
+	}
+}
+
+func TestAggregateEmpty(t *testing.T) {
+	tbl := TableValue{Columns: []string{"x"}}
+	_, err := tbl.Aggregate("x", "sum")
+	if err == nil {
+		t.Errorf("expected error on empty table")
+	}
+}
+
+func TestFirstEmptyTable(t *testing.T) {
+	tbl := TableValue{Columns: []string{"a"}}
+	r := tbl.First(5)
+	if len(r.Rows) != 0 {
+		t.Errorf("expected 0 rows from empty table")
+	}
+}
+
+func TestUniqueEmptyTable(t *testing.T) {
+	tbl := TableValue{Columns: []string{"a"}}
+	r := tbl.Unique(nil)
+	if len(r.Rows) != 0 {
+		t.Errorf("expected 0 rows")
+	}
+}
+
+func TestGroupByEmptyTable(t *testing.T) {
+	tbl := TableValue{Columns: []string{"city"}}
+	r := tbl.GroupBy([]string{"city"})
+	if len(r.Rows) != 0 {
+		t.Errorf("expected 0 groups")
+	}
+}
+
+func TestAggregateCount(t *testing.T) {
+	tbl := makeTestTable()
+	val, err := tbl.Aggregate("age", "count")
+	if err != nil {
+		t.Fatalf("count error: %v", err)
+	}
+	if val.String() != "3" {
+		t.Errorf("expected count 3, got %s", val.String())
+	}
+}
