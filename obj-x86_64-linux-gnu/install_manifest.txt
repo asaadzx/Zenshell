@@ -1,5 +1,0 @@
-/usr/bin/zenshell
-/usr/share/zencr/plugins/autosuggest.lua
-/usr/share/zencr/plugins/syntax-highlighting.lua
-/usr/share/zencr/plugins/git-prompt.lua
-/usr/share/zencr/plugins/ghost-prompt.lua

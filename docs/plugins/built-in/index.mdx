@@ -1,0 +1,24 @@
+# Built-in Plugins
+
+These plugins ship with BakShell in `plugins/` and are ready to use. Copy them to `~/.zencr/plugins/` and enable in `config.lua`.
+
+| Plugin | Description | Entrypoints |
+|--------|-------------|-------------|
+| [Aquia Prompt](./aquia-prompt/) | Two-line prompt with git status and exit code (default) | `get_prompt`, `execute_command`, `set_exit_code` |
+| [Git Prompt](./git-prompt/) | Git status in prompt + `git-status` command | `execute_command`, `get_prompt_suffix` |
+| [Autosuggest](./autosuggest/) | Fuzzy-matched command history + `suggest` command | `execute_command`, `on_command_entered`, `get_suggestion` |
+| [Syntax Highlighting](./syntax-highlighting/) | Color-coded command tokens + `highlight` command | `execute_command`, `on_command_entered`, `get_highlighted_command` |
+| [Ghost Prompt](./ghost-prompt/) | Powerlevel10k-inspired prompt with system monitoring | `get_prompt`, `execute_command` |
+
+## Default config
+
+```lua
+plugins = {
+    "aquia-prompt.lua",
+    "autosuggest.lua",
+    "syntax-highlighting.lua",
+    "git-prompt.lua",
+}
+```
+
+The ghost-prompt is not enabled by default — it's an alternative to aquia-prompt.

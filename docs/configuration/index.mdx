@@ -1,0 +1,68 @@
+# Configuration
+
+BakShell reads `~/.zencr/config.lua` on startup. This is a standard Lua file that returns global tables — no `return` statement needed, just assign to globals.
+
+## Example
+
+```lua
+plugins = {
+    "aquia-prompt.lua",
+    "autosuggest.lua",
+}
+
+theme = {
+    prompt_color  = "#4287f5",
+    background    = "#000000",
+    prompt_format = "[%u@%h %d]$ "
+}
+
+settings = {
+    history_size  = 1000,
+    auto_complete = true
+}
+```
+
+## `plugins` table
+
+List of Lua plugin filenames to load from `~/.zencr/plugins/`.
+
+```lua
+plugins = {
+    "aquia-prompt.lua",
+    "autosuggest.lua",
+    "git-prompt.lua",
+}
+```
+
+Only plugins listed here are loaded. Files in the plugins directory that aren't in this list are ignored.
+
+## `theme` table
+
+Controls the prompt appearance when no plugin provides a `get_prompt()` function.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `prompt_color` | `"#4287f5"` | Hex color for the prompt text |
+| `background` | `"#000000"` | Hex color for background (reserved for future use) |
+| `prompt_format` | `"[%u@%h %d]$ "` | Format string with placeholders |
+
+### Placeholders
+
+| Token | Replaced with |
+|-------|---------------|
+| `%u` | Username (`$USER` environment variable) |
+| `%h` | Hostname |
+| `%d` | Current directory (`~` replaces `$HOME`) |
+
+The format string is processed with `strings.ReplaceAll` — no regex overhead.
+
+## `settings` table
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `history_size` | `1000` | Maximum history lines written to `~/.zencr/history` |
+| `auto_complete` | `true` | Reserved for future tab-completion support |
+
+## Config not found
+
+If `~/.zencr/config.lua` does not exist, the shell starts with defaults and prints a warning on stderr. To silence the warning, create the file or copy the example.

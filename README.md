@@ -1,134 +1,77 @@
-# Zen Shell 🦈⚡  
+# BakShell
 
-**A blazing-fast, customizable, and plugin-driven shell built with C++!**  
+A blazing-fast, customizable shell with Lua plugin support — rewritten in Go.
 
-## 🚀 Features  
-- **Cross-platform**: Works on Arch Linux, Debian, Void, Fedora, OpenSUSE, and more.  
-- **Plugin System**: Load only the plugins you need via `~/.zencr/config.lua`.  
-- **Theming Support**: Customize colors and prompt styles easily.  
-- **Zsh-like Power**: Autocompletion, syntax highlighting, and a powerful history system.  
-- **Built for Performance**: Optimized with modern C++ for speed and efficiency.  
-- **Lua plugins Support**: Add Lua Plugins Support 
+## Quickstart
 
-## 📥 Installation  
-### Wget one script installation
-```
-wget -qO- https://raw.githubusercontent.com/GhostFreakOS/Zenshell/main/install.sh | bash
-```
-### 1️⃣ Clone the Repository  
 ```sh
-git clone https://github.com/D3f4ult-dev/Zenshell.git
-cd Zenshell
+go build -ldflags="-s -w" -o bsh ./cmd/bsh
+./bsh
 ```
 
-### 2️⃣ Run the Installer  
-```sh
-chmod +x install.sh  
-sudo ./install.sh  
-```
+Single static binary, ~3MB stripped. No runtime deps.
 
-### 3️⃣ Start Zen Shell  
-```sh
-zen  
-```
+## Features
 
-## ⚙️ Configuration  
-
-The config file is located at `~/.zencr/config.lua`. You can specify:  
-- **Enabled plugins**:  
-```lua
-  -- List of active plugins
-plugins = {
-    "welcome.lua",
-    "git_status.lua"
-}
-```  
-
-- **Theming options**:  
- ```lua  
-  -- Theme settings
-theme = {
-    prompt_color = "#4287f5",     -- Blue prompt (hex format)
-    background = "#000000",       -- Black background (hex format)
-    prompt_format = "[%u@%h %d]$ " -- Format: [username@hostname directory]$
-}   
-```
-  
-- **Custom Settings**:
-```lua
--- Custom shell settings
-settings = {
-    history_size = 1000,
-    auto_complete = true
-}  
-```
-
-## 🔌 Plugin System  
-
-Zen Shell supports dynamic plugins! Drop `.so` files into `~/.zencr/plugins/` and enable them in the config.
-Zen Shell Also Support Lua programming luangauge in it   
-
-## 🛠 Uninstallation  
-```sh
-sudo rm /bin/zen  
-rm -rf ~/.zencr  
-```
-
-## Dependencies
-
-- C++17 compatible compiler
-- CMake 3.10 or higher
-- Readline library
-- Lua 5.1 or higher
-
-## Building
-
-```bash
-mkdir build
-cd build
-cmake ..
-make
-```
-
-## Installation
-
-```bash
-sudo make install
-```
+- **Lua config** — theme colors, prompt format, plugin selection at `~/.zencr/config.lua`
+- **Lua plugins** — overload `execute_command` and `get_prompt` from Lua scripts
+- **Aquia theme** — beautiful two-line prompt with git status, exit code, and Aquia color palette
+- **Readline input** — arrow-key history, line editing, history persistence
+- **No libreadline / liblua** — fully static, no system library dependencies
 
 ## Configuration
 
-The shell looks for configuration in `~/.zencr/config.lua`. Here's an example configuration:
-
 ```lua
--- Active plugins
+-- ~/.zencr/config.lua
 plugins = {
-    "example.lua"
+    "aquia-prompt.lua",
+    "autosuggest.lua",
 }
 
--- Theme settings
 theme = {
-    prompt_color = "#3498db",
+    prompt_color = "#4287f5",
+    background   = "#000000",
     prompt_format = "[%u@%h %d]$ "
+}
+
+settings = {
+    history_size = 1000,
+    auto_complete = true
 }
 ```
 
-## Plugin Development
+`%u` → user, `%h` → hostname, `%d` → cwd (with `~` for home).
 
-Plugins are written in Lua and should be placed in `~/.zencr/plugins/`. Each plugin should implement an `execute_command` function that returns true if it handled the command.
+## Plugins
 
-Example plugin:
+Lua scripts in `~/.zencr/plugins/`. Each plugin can define:
 
 ```lua
 function execute_command(args)
     if args[1] == "hello" then
         print("Hello, World!")
-        return true
+        return true  -- command handled
     end
-    return false
+    return false     -- pass to shell
+end
+
+function get_prompt()
+    return "❯ "      -- custom prompt (overrides theme prompt_format)
+end
+
+function set_exit_code(code)
+    -- called after every command with the exit code
 end
 ```
 
+## Development
+
+```sh
+go build ./cmd/bsh && go vet ./...
+```
+
+Push a `v*` tag to trigger CI — builds `.tar.gz`, `.deb`, `.rpm`, `.tar.zst` for Linux and macOS via GoReleaser.
+
 ## License
 
-MIT License
+MIT

@@ -1,0 +1,59 @@
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: bsh
+    binary: bsh
+    main: ./cmd/bsh
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: targz
+    format: tar.gz
+    name_template: "bsh_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+nfpms:
+  - id: packages
+    package_name: bsh
+    file_name_template: "bsh_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds:
+      - bsh
+    formats:
+      - deb
+      - rpm
+    description: Baklava Shell - A blazing-fast, customizable shell
+    maintainer: BakShell Contributors
+    license: MIT
+    bindir: /usr/bin
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([^)]*\))?[!:]'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\([^)]*\))?[!:]'
+      order: 1
+    - title: Maintenance
+      order: 2
+
+release:
+  draft: true
+  replace_existing_draft: true

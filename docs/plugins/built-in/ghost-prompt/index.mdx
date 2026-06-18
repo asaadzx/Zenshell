@@ -1,0 +1,48 @@
+# Ghost Prompt
+
+A Powerlevel10k-inspired prompt with system monitoring. An alternative to the default Aquia prompt.
+
+## Appearance
+
+Multi-segment prompt showing user@host, directory, git status, system load, and time:
+
+```
+❯ user@host ~/path main ↑1 ✓ [14:25:30]
+❯ _
+```
+
+(The exact appearance depends on icon support in your terminal font.)
+
+## Entrypoints
+
+| Function | Behavior |
+|----------|----------|
+| `get_prompt()` | Returns the full multi-segment prompt |
+| `execute_command(args)` | Passes through (no custom commands) |
+
+## Features
+
+- **Git status**: Branch name, ahead/behind, modified/staged/untracked, stash count
+- **System monitoring**: CPU, memory, and disk usage (shown when above 80% threshold)
+- **Date and time**: Configurable format (default: 24h time + date)
+- **Segments**: User@host, directory, git, system, time — separated by configurable characters
+
+## Configuration
+
+Edit the `config` table at the top of the plugin to customize:
+
+```lua
+local config = {
+    prompt_style = "powerlevel10k",
+    dir_style = "full",
+    dir_max_length = 40,
+    time_style = "24h",
+    time_format = "%H:%M:%S",
+    system_monitoring = true,
+    system_warning_threshold = 80,
+}
+```
+
+## Icons
+
+Uses Powerlevel10k-style icons for git status, directory, and prompt characters. These require a [Nerd Font](https://www.nerdfonts.com/) or similar patched font to display correctly. If icons don't render, your terminal font may not include them — install a Nerd Font and set it as your terminal font.

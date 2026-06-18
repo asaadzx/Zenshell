@@ -1,0 +1,75 @@
+# Architecture
+
+## High-level flow
+
+```
+cmd/bsh/main.go
+  └─ shell.New()
+       ├── os.MkdirAll → ~/.zencr/, ~/.zencr/plugins/
+       ├── plugins.New() → lua.LState
+       ├── plugins.LoadConfig() → parse ~/.zencr/config.lua
+       └── plugins.LoadPlugins() → run Lua scripts, cache functions
+  └─ shell.Run()
+       ├── readline.NewEx() → line editor with history
+       ├── signal.Notify() → SIGINT handler goroutine
+       └── main REPL loop:
+            ├── generatePrompt() → plugin prompt or config prompt
+            ├── Readline() → read input with arrow-key history
+            ├── tokenize() → strings.Fields
+            └── execute() → cd / exit / exec.Command / Lua plugin
+```
+
+## Package structure
+
+```
+cmd/bsh/main.go          — 10-line entrypoint
+internal/
+  shell/shell.go          — Shell struct, REPL loop, cd/exit/exec builtins
+  config/config.go        — Config structs, LoadFromLua() parser
+  plugins/plugins.go      — Lua Manager: state, plugin loading, cached calls
+  prompt/prompt.go        — HexToANSI(), Format() helpers
+plugins/                  — Lua plugin scripts (enabled via config)
+```
+
+## Key optimizations
+
+### Cached Lua function references
+
+On startup, after all plugins are loaded, the shell does `lua_getglobal(L, "execute_command")` and `lua_getglobal(L, "get_prompt")` once. The results are stored as `*lua.LFunction` pointers.
+
+This avoids:
+- A global table hash lookup on every command
+- A global table hash lookup on every prompt
+- String allocation for the function name on every call
+
+### No regex in prompt path
+
+The config-based prompt uses `strings.ReplaceAll` for `%u`, `%h`, `%d` instead of `regexp.ReplaceAll`. This is approximately 50× faster per prompt call (microseconds vs nanoseconds doesn't matter much for one prompt, but matters when you're mashing arrow keys).
+
+### Readline auto-persistence
+
+`chzyer/readline` writes each line to the history file as it's entered. No manual `Save()`/`Load()` calls needed. The file path is `~/.zencr/history`.
+
+## Exit code flow
+
+```
+execute()
+  └─ exec.Command.Run()
+       └─ exec.ExitError.ExitCode()
+            └─ plugins.SetExitCode(code)
+                 └─ Lua set_exit_code(code) called
+                      └─ next prompt reads last_exit
+```
+
+## Threading model
+
+Single-threaded Go process with one goroutine for SIGINT handling. The readline call blocks the main goroutine. No shared state, no mutexes.
+
+## Dependencies
+
+Two external Go modules — both pure Go, zero CGo:
+
+| Module | Purpose |
+|--------|---------|
+| `github.com/yuin/gopher-lua` | Lua 5.1 VM in pure Go |
+| `github.com/chzyer/readline` | Line editing, history, completion |

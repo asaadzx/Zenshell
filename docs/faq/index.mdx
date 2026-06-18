@@ -1,0 +1,75 @@
+# FAQ / Troubleshooting
+
+## Plugin not loading
+
+- Check the filename matches exactly in `config.lua`'s `plugins` list (case-sensitive)
+- Check the file exists in `~/.zencr/plugins/`
+- Look for "Error loading plugin" on stderr at startup — that's the Lua error
+- Only `.lua` files are loaded
+
+## Multiple prompt plugins conflict
+
+Only the **last** `get_prompt` function loaded wins. If two plugins both define it, one silently replaces the other. The loading order is determined by `os.ReadDir` (filesystem order, typically alphabetical).
+
+**Fix**: Only enable one prompt plugin at a time in `config.lua`.
+
+## Ctrl+C / SIGINT behavior
+
+Pressing Ctrl+C prints "Use the 'exit' command to quit the shell." and refreshes the prompt line. This prevents accidental exits. Use `exit` or `quit` to close the shell.
+
+## Reset everything
+
+```sh
+rm -rf ~/.zencr
+```
+
+Shell recreates the directories on next start.
+
+## Install a plugin from a file
+
+```sh
+cp my-plugin.lua ~/.zencr/plugins/
+# Then add "my-plugin.lua" to config.lua's plugins list
+```
+
+## Config warning on startup
+
+"Warning: could not open config" just means `~/.zencr/config.lua` doesn't exist. The shell runs fine with defaults. To silence it:
+
+```sh
+cp config.lua ~/.zencr/config.lua
+```
+
+## "exec format error"
+
+You built the binary for the wrong platform. Check:
+
+```sh
+go env GOOS GOARCH
+```
+
+## Smaller binary
+
+```sh
+go build -ldflags="-s -w" -trimpath -o bsh ./cmd/bsh
+```
+
+`-trimpath` strips Go root paths from the binary.
+
+## Run non-interactively
+
+Pipe input or use printf:
+
+```sh
+echo 'ls' | ./bsh
+printf 'cd /tmp\npwd\nexit\n' | ./bsh
+```
+
+## Making a release
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+CI creates a draft release with all packages. Publish it from the GitHub UI.

@@ -1,0 +1,26 @@
+# BakShell
+
+A blazing-fast, customizable shell with Lua plugin support — rewritten in Go.
+
+Zero system dependencies. Single static binary, ~3MB stripped.
+
+```sh
+go build -ldflags="-s -w" -o bsh ./cmd/bsh
+./bsh
+```
+
+## Documentation
+
+| Section | Description |
+|---------|-------------|
+| [Getting Started](./getting-started/) | Build, install, first run |
+| [Configuration](./configuration/) | `~/.zencr/config.lua` reference |
+| [Theming](./theming/) | Prompt appearance, hex colors, format strings |
+| [Commands](./commands/) | Built-in commands |
+| [Architecture](./architecture/) | How the shell works internally |
+| [Plugins Overview](./plugins/) | Plugin system explained |
+| [Plugin Development](./plugins/development/) | Write your own plugins |
+| [Plugin API Reference](./plugins/api-reference/) | Complete Lua API |
+| [Built-in Plugins](./plugins/built-in/) | Documentation for included plugins |
+| [Contributing](./contributing/) | How to contribute |
+| [FAQ](./faq/) | Troubleshooting and common questions |

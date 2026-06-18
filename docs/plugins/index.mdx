@@ -1,0 +1,51 @@
+# Plugin Overview
+
+Plugins are Lua scripts that hook into the shell through global functions. They live in `~/.zencr/plugins/` and are enabled by name in `~/.zencr/config.lua`.
+
+## How they load
+
+1. The shell reads the `plugins` table from config.lua
+2. For each filename, it runs `luaL_dofile("~/.zencr/plugins/<name>")`
+3. After all plugins load, the shell looks for two globals and caches their references:
+   - `execute_command` — called before every command
+   - `get_prompt` — called before every prompt
+
+All plugins share one Lua state. Only the last definition of each global function wins.
+
+## What a plugin can do
+
+| Capability | Function | When called |
+|------------|----------|-------------|
+| Override the prompt | `get_prompt()` | Every prompt |
+| Intercept commands | `execute_command(args)` | Every command |
+| Track exit codes | `set_exit_code(code)` | After every command |
+
+## Quick example
+
+`~/.zencr/plugins/hello.lua`:
+
+```lua
+function execute_command(args)
+    if args[1] == "hello" then
+        print("Hello from Lua!")
+        return true
+    end
+    return false
+end
+```
+
+Enable it in `config.lua`:
+
+```lua
+plugins = { "hello.lua" }
+```
+
+Then run `hello` in the shell.
+
+## Further reading
+
+| Guide | What it covers |
+|-------|----------------|
+| [Plugin Development](./development/) | Tutorials, patterns, performance |
+| [API Reference](./api-reference/) | Full function docs, standard libraries |
+| [Built-in Plugins](./built-in/) | Docs for aquia-prompt, git-prompt, autosuggest, etc. |

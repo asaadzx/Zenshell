@@ -1,0 +1,33 @@
+# Autosuggest
+
+Fuzzy-matched command history with frequency tracking.
+
+## Entrypoints
+
+| Function | Behavior |
+|----------|----------|
+| `execute_command(args)` | Handles the `suggest` command; logs every executed command to history |
+| `on_command_entered(cmd)` | Hook called after each command |
+| `get_suggestion(input)` | Returns the best match for partial input |
+
+## Commands
+
+### `suggest <partial>`
+
+Shows the top 5 history matches for a partial command:
+
+```
+❯ suggest git p
+Suggestions:
+1. git push
+2. git pull
+3. git push --force
+```
+
+## How it works
+
+- Maintains an in-memory history list (separate from readline's file-based history)
+- Uses Levenshtein distance for fuzzy matching (allows 2-character typos)
+- Exact prefix matches rank above fuzzy matches
+- Results are cached per input string to avoid recomputation
+- Writes to `~/.zencr/history` on each new command

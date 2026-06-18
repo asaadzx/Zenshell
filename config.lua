@@ -2,7 +2,7 @@
 
 -- List of active plugins
 plugins = {
-    "ghost-prompt.lua",
+    "aquia-prompt.lua",
     "autosuggest.lua",
     "syntax-highlighting.lua",
     "git-prompt.lua"

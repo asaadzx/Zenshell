@@ -1,0 +1,121 @@
+# Plugin Development
+
+## Your first plugin
+
+Create `~/.zencr/plugins/hello.lua`:
+
+```lua
+function execute_command(args)
+    if args[1] == "hello" then
+        print("Hello from Lua plugin!")
+        return true
+    end
+    return false
+end
+```
+
+Enable it in `~/.zencr/config.lua`:
+
+```lua
+plugins = { "hello.lua" }
+```
+
+Then run `hello` in the shell.
+
+## Prompt plugin
+
+A `get_prompt()` function replaces the default prompt entirely.
+
+**Simple:**
+
+```lua
+function get_prompt()
+    return "\27[38;2;0;188;212m❯ \27[0m"
+end
+```
+
+**With user and directory:**
+
+```lua
+local user = os.getenv("USER") or "user"
+local home = os.getenv("HOME") or "/home/" .. user
+
+function get_prompt()
+    local pwd = io.popen("pwd"):read("*l"); io.popen("pwd"):close()
+    if pwd:sub(1, #home) == home then
+        pwd = "~" .. pwd:sub(#home + 1)
+    end
+    return "\27[38;2;0;188;212m[" .. user .. "@" .. pwd "]\27[0m$ "
+end
+```
+
+## Command plugin
+
+Intercept commands before they reach the shell or `os/exec`.
+
+```lua
+local function uptime()
+    local h = io.popen("uptime -p")
+    local r = h:read("*a"); h:close()
+    print("System uptime: " .. r:gsub("%s+$", ""))
+end
+
+function execute_command(args)
+    if args[1] == "uptime" then
+        uptime()
+        return true
+    end
+    return false
+end
+```
+
+## Exit-code tracking
+
+The shell calls `set_exit_code(code)` after every command. Use it to color the prompt:
+
+```lua
+local last_exit = 0
+
+function set_exit_code(code)
+    last_exit = code
+end
+
+function get_prompt()
+    local color = last_exit == 0 and "\27[32m" or "\27[31m"
+    return color .. "❯ \27[0m"
+end
+```
+
+## Performance rules
+
+1. **Cache env lookups at module level** — `os.getenv("USER")`, `os.getenv("HOME")`, `io.popen("hostname")` don't change during a session. Set them once at the top of your plugin.
+
+2. **One git call, not four** — `git status --porcelain --branch` returns branch, ahead/behind, and dirty files in one process. The naive pattern of `git rev-parse` + `git status` + `git stash list` + `git rev-list` spawns four subprocesses.
+
+3. **Cache with TTL** — Git status doesn't change between keystrokes. Cache for 1-2 seconds:
+
+    ```lua
+    local git_cache = {}
+    local git_ts = 0
+
+    local function get_git()
+        if os.time() - git_ts < 2 then return git_cache end
+        -- ... fetch fresh status ...
+        git_cache = result
+        git_ts = os.time()
+        return git_cache
+    end
+    ```
+
+4. **Use `table.concat`** — Repeated `..` concatenation allocates intermediate strings. Use `table.insert` + `table.concat`:
+
+    ```lua
+    -- Slow:
+    local s = ""
+    for _, v in ipairs(t) do s = s .. v end
+
+    -- Fast:
+    local parts = {}
+    for _, v in ipairs(t) do table.insert(parts, v) end
+    return table.concat(parts)
+    ```

@@ -1,0 +1,44 @@
+# Aquia Prompt
+
+The default prompt. Two-line design with git status and exit-code tracking in the Aquia color palette.
+
+## Appearance
+
+```
+╭─ user@host ~/path (main ✓)
+╰─❯
+```
+
+On error:
+
+```
+╭─ user@host ~/path (main ●) [1]
+╰─❯
+```
+
+## Color scheme
+
+| Element | Color | Hex |
+|---------|-------|-----|
+| Frame lines | Aqua | `#00BCD4` |
+| User@host | Bold white | `#EEEEEE` |
+| Directory path | Cyan | `#80DEEA` |
+| Git branch | Yellow | `#FFCA28` |
+| Clean status | Green checkmark | `#00C853` |
+| Dirty status | Red circle | `#FF5252` |
+| Exit code | Gray | `#787878` |
+
+## Entrypoints
+
+| Function | Behavior |
+|----------|----------|
+| `get_prompt()` | Returns the two-line Aquia prompt |
+| `execute_command(args)` | Passes through (allows exit/quit) |
+| `set_exit_code(code)` | Tracks exit code for the next prompt |
+
+## How it works
+
+- **Caching**: `USER`, `HOST`, `HOME` are looked up once at init. Git status is cached with a 2-second TTL.
+- **Single git call**: Uses `git status --porcelain --branch` to get branch, dirty state, and ahead/behind in one subprocess.
+- **String building**: Uses `table.concat` for zero-garbage prompt construction.
+- **Exit code**: Stores the last exit code and displays it in gray brackets when non-zero.

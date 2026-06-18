@@ -1,0 +1,52 @@
+# Contributing
+
+## Prerequisites
+
+- Go 1.21+
+- Understanding of Go's `os/exec`, `os/signal`, and `io` packages
+- Basic Lua (for plugin work)
+
+## Project setup
+
+```sh
+git clone <repo-url>
+cd bakshell
+go build -ldflags="-s -w" -o bsh ./cmd/bsh
+```
+
+## Code structure
+
+```
+cmd/bsh/                       entrypoint (thin, ~10 lines)
+internal/shell/shell.go        REPL loop, built-in commands
+internal/config/config.go      Lua config parser
+internal/plugins/plugins.go    Lua state management, plugin lifecycle
+internal/prompt/prompt.go      hex_to_ansi, format helpers
+plugins/                       Lua plugin scripts
+docs/                          .mdx documentation
+```
+
+## Making changes
+
+1. Make your change
+2. Run `go build ./cmd/bsh && go vet ./...`
+3. Test manually: `echo 'echo ok' | ./bsh`
+4. If it's a plugin change, test all 5 entrypoints
+
+## Release process
+
+Push a `v*` tag to trigger the release workflow:
+
+```sh
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+This runs GoReleaser which cross-compiles for 4 targets, packages `.deb`/`.rpm`/`.tar.gz`/`.tar.zst`, and creates a draft GitHub Release.
+
+## Coding conventions
+
+- No CGo, no init() functions, no reflection in hot paths
+- Lua functions `execute_command` and `get_prompt` are cached as `*lua.LFunction` pointers after loading — don't look them up on every call
+- Prompt formatting uses `strings.ReplaceAll`, not regex
+- All errors printed to stderr, not stdout

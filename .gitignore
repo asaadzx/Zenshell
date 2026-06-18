@@ -1,7 +1,14 @@
-# Build directory
-build/*
+# Go binary
+/bsh
+bsh.exe
+bakshell
 
-# CMake generated files
+# GoReleaser output
+dist/
+
+# C++ build artifacts
+build/
+obj-x86_64-linux-gnu/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
@@ -9,38 +16,30 @@ Makefile
 *.cmake
 !cmake/*.cmake
 
-# Compiled Object files
-*.slo
-*.lo
+# Compiled object files
 *.o
 *.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
+*.lo
+*.slo
 *.so
 *.dylib
 *.dll
-
-# Compiled Static libraries
-*.lai
-*.la
 *.a
 *.lib
+*.la
+*.lai
+*.gch
+*.pch
 
-# Executables
-*.exe
-*.out
-*.app
+# C++ binaries
 zenshell
-zen 
+zenshell.exe
+zen
+zen.exe
 
-# IDE specific files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-

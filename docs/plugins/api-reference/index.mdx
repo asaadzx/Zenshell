@@ -1,0 +1,151 @@
+# Plugin API Reference
+
+## Shell-provided globals
+
+These are the entrypoints the shell checks after loading plugins. Define them in your Lua script.
+
+### `execute_command(args)`
+
+Called before every command.
+
+| Aspect | Detail |
+|--------|--------|
+| **Signature** | `execute_command(args: table) → boolean` |
+| **args** | 1-indexed table: `args[1]` is command name, `args[2]` is first argument, etc. |
+| **Return** | `true` to indicate command was handled (shell won't execute it), `false` to pass through |
+| **Called** | Every command, including built-ins |
+
+Example:
+
+```lua
+function execute_command(args)
+    if args[1] == "mycmd" then
+        print("handled")
+        return true
+    end
+    return false
+end
+```
+
+### `get_prompt()`
+
+Called before every prompt to get the prompt string.
+
+| Aspect | Detail |
+|--------|--------|
+| **Signature** | `get_prompt() → string\|nil` |
+| **Return** | A prompt string (may include ANSI escapes), or `nil`/empty for config-based fallback |
+| **Called** | Every iteration of the REPL loop |
+
+Example:
+
+```lua
+function get_prompt()
+    return "\27[32m❯ \27[0m"
+end
+```
+
+### `set_exit_code(code)`
+
+Called after every command with the exit code.
+
+| Aspect | Detail |
+|--------|--------|
+| **Signature** | `set_exit_code(code: number) → void` |
+| **code** | Exit code of the last command (0 for success, non-zero for failure, 127 for not found) |
+| **Called** | After every command execution |
+
+Example:
+
+```lua
+local last_exit = 0
+
+function set_exit_code(code)
+    last_exit = code
+end
+```
+
+## Standard Lua libraries
+
+All standard Lua 5.1 libraries are available:
+
+### `os` library
+
+| Function | Use case |
+|----------|----------|
+| `os.getenv("USER")` | Current username |
+| `os.getenv("HOME")` | Home directory path |
+| `os.time()` | Unix timestamp (for cache TTL) |
+| `os.date(format)` | Formatted date/time string |
+| `os.clock()` | CPU time (for timing commands) |
+
+### `io` library
+
+| Function | Use case |
+|----------|----------|
+| `io.popen(cmd)` | Run subprocess, return file handle to read output |
+| `io.open(path, mode)` | Open a file for reading/writing |
+| `io.lines(path)` | Iterate over file lines |
+
+### `string` library
+
+| Function | Use case |
+|----------|----------|
+| `string.format(fmt, ...)` | Build formatted strings |
+| `string.sub(s, i, j)` | Get substring |
+| `string.gsub(s, pat, rep)` | Replace pattern matches |
+| `string.match(s, pat)` | Extract pattern match |
+| `string.gmatch(s, pat)` | Iterate over pattern matches |
+| `string.find(s, pat)` | Find pattern position |
+| `string.byte(s, i)` | Get character code |
+| `string.char(...)` | Build string from codes |
+
+### `table` library
+
+| Function | Use case |
+|----------|----------|
+| `table.insert(t, v)` | Append to array |
+| `table.concat(t, sep)` | Join array into string (fast!) |
+| `table.remove(t, i)` | Remove element |
+| `table.sort(t, cmp)` | Sort array |
+
+### `math` library
+
+Full standard math library: `math.floor`, `math.ceil`, `math.min`, `math.max`, `math.random`, etc.
+
+## Subprocess pattern
+
+The standard way to run a command and capture its output:
+
+```lua
+local handle = io.popen("command 2>/dev/null")
+local output = handle:read("*a")
+handle:close()
+-- output contains the full stdout + stderr
+```
+
+For line-by-line:
+
+```lua
+local handle = io.popen("command")
+for line in handle:lines() do
+    -- process line
+end
+handle:close()
+```
+
+## ANSI escape reference
+
+```lua
+local ESC = "\27"  -- or string.char(27)
+
+-- Foreground colors (24-bit RGB):
+ESC .. "[38;2;R;G;Bm"
+
+-- Background colors:
+ESC .. "[48;2;R;G;Bm"
+
+-- Styles:
+ESC .. "[1m"   -- bold
+ESC .. "[0m"   -- reset all attributes
+```

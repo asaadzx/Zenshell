@@ -1,0 +1,80 @@
+# Theming
+
+Two approaches to customize the prompt: config-based (simple) or plugin-based (full control).
+
+## Config-based theming
+
+Set the color and format in `~/.zencr/config.lua`:
+
+```lua
+theme = {
+    prompt_color  = "#00BCD4",
+    prompt_format = "[%u@%h %d]$ "
+}
+```
+
+Renders as `[user@host ~/path]$ ` in the specified color. This path uses `strings.ReplaceAll` — no regex, fast.
+
+### Hex colors
+
+Any standard 6-digit hex color:
+
+```
+#FF5722    deep orange
+#4CAF50    green
+#9C27B0    purple
+#00BCD4    aqua/teal (Aquia palette)
+```
+
+## Plugin-based theming
+
+Define `get_prompt()` in a Lua plugin for complete control. This overrides the config prompt entirely.
+
+```lua
+function get_prompt()
+    return "\27[38;2;0;188;212m❯ \27[0m"
+end
+```
+
+## ANSI escape codes
+
+| Code | Effect |
+|------|--------|
+| `\27[0m` | Reset all attributes |
+| `\27[1m` | Bold / bright |
+| `\27[38;2;R;G;Bm` | 24-bit foreground color |
+| `\27[48;2;R;G;Bm` | 24-bit background color |
+
+### hex_to_ansi helper
+
+```lua
+function hex_to_ansi(hex)
+    local h = hex:gsub("^#", "")
+    if #h ~= 6 then return "\27[0m" end
+    local r = tonumber(h:sub(1,2), 16)
+    local g = tonumber(h:sub(3,4), 16)
+    local b = tonumber(h:sub(5,6), 16)
+    return string.format("\27[38;2;%d;%d;%dm", r, g, b)
+end
+```
+
+## Aquia theme (default)
+
+The included `aquia-prompt.lua` renders:
+
+```
+╭─ user@host ~/path (branch ✓)
+╰─❯
+```
+
+| Element | Color | Hex |
+|---------|-------|-----|
+| Frame lines | Aqua | `#00BCD4` |
+| User@host | Bold white | `#EEEEEE` |
+| Directory path | Cyan | `#80DEEA` |
+| Git branch | Yellow | `#FFCA28` |
+| Clean status | Green | `#00C853` |
+| Dirty status | Red | `#FF5252` |
+| Exit code | Gray | `#787878` |
+
+The Aquia prompt includes git status and exit-code tracking out of the box. See the [Aquia plugin docs](../plugins/built-in/aquia-prompt/) for details.

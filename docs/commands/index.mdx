@@ -1,0 +1,49 @@
+# Built-in Commands
+
+BakShell handles a few commands internally; everything else is passed to the system.
+
+## `cd` — change directory
+
+```sh
+cd          # go to $HOME
+cd /tmp     # go to /tmp
+cd ~/code   # go to ~/code
+```
+
+If the directory doesn't exist, the shell prints an error message.
+
+## `exit` / `quit` — exit the shell
+
+```sh
+exit
+quit
+```
+
+Both are equivalent. Cleanly closes the readline session and saves history.
+
+## External commands
+
+Everything that isn't a built-in is executed via `os/exec`:
+
+```sh
+ls -la
+echo "hello world"
+git status
+python3 script.py
+cat file.txt | grep pattern
+```
+
+The command's stdin, stdout, and stderr are connected directly to the terminal.
+
+### Exit codes
+
+- If the command runs successfully, exit code is `0`
+- If it fails, exit code comes from the command (typically `1`)
+- If the command is not found, exit code is `127`
+- The exit code is tracked and passed to Lua via `set_exit_code(code)` — plugins can display it in the prompt
+
+## `cd` behavior
+
+- `cd` with no arguments changes to `$HOME`
+- `cd -` (going to previous directory) is not implemented yet
+- `cd` respects symlinks (it uses `os.Chdir`, same as the kernel)

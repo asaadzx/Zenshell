@@ -1,0 +1,32 @@
+# Git Prompt
+
+Displays git status in the prompt and provides a `git-status` command.
+
+## Entrypoints
+
+| Function | Behavior |
+|----------|----------|
+| `execute_command(args)` | Handles the `git-status` command |
+| `get_prompt_suffix()` | Returns a git status string for prompt (not used by default — intended for integrations) |
+
+## Commands
+
+### `git-status`
+
+Prints detailed git repository information:
+
+```
+Branch: main
+Status:
+  Modified: Yes
+  Staged: No
+  Untracked: Yes
+  Ahead: 1
+  Behind: 0
+  Stashed: No
+```
+
+## How it works
+
+- Uses 2-second cache TTL for git status
+- Calls `git rev-parse`, `git status --porcelain`, `git stash list`, and `git rev-list` separately (not optimized into a single call like the Aquia prompt)

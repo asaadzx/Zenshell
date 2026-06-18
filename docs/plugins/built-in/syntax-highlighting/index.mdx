@@ -1,0 +1,40 @@
+# Syntax Highlighting
+
+Color-codes command tokens and validates known commands.
+
+## Entrypoints
+
+| Function | Behavior |
+|----------|----------|
+| `execute_command(args)` | Handles the `highlight` command |
+| `on_command_entered(cmd)` | Validates known commands; blocks execution if invalid |
+| `get_highlighted_command(cmd)` | Returns color-highlighted version of a command string |
+
+## Commands
+
+### `highlight <command>`
+
+Prints a color-highlighted version of the command:
+
+```
+❯ highlight "git push --force origin main"
+```
+
+Output shows each token type in its assigned color.
+
+## Token colors
+
+| Token type | Color | Examples |
+|------------|-------|----------|
+| Command | Cyan | `git`, `ls`, `cd` |
+| Flag/option | Yellow | `--force`, `-a` |
+| String | Green | `"hello"`, `'world'` |
+| Number | Magenta | `42`, `3.14` |
+| Operator | Blue | `\|`, `>`, `<` |
+| Variable | Red | `$PATH`, `$HOME` |
+| Comment | Gray | `# this is a comment` |
+| Everything else | Default | plain text |
+
+## Known commands
+
+The plugin knows argument lists for `git`, `docker`, and `apt`. If you type a subcommand that doesn't exist (like `git statuss`), the plugin prints an error and blocks execution.
