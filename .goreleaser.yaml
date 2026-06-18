@@ -67,3 +67,4 @@ changelog:
 release:
   draft: true
   replace_existing_draft: true
+  prerelease: true

@@ -46,9 +46,16 @@ internal/shell/completer.go  — Tab completion (PATH cache + file paths)
 internal/shell/tokenize.go   — Tokenizer: quoting, $VAR, ~, metachar splitting (;/|/&/></)
 internal/shell/pipeline.go   — Pipeline execution (|), redirections (>/>
 /<</2>/2>&1/&>), builtins
-internal/shell/config.go     — Lua config parser (Config, ThemeConfig, SettingsConfig)
-internal/shell/plugins.go    — Lua plugin loader + cached call wrappers
-internal/shell/prompt.go     — hex_to_ansi, format_prompt with %u/%h/%d
+internal/shell/tokenize_test.go  — Tokenizer tests
+internal/shell/pipeline_test.go  — Pipeline/builtin tests
+internal/config/config.go    — Lua config parser (Config, ThemeConfig, SettingsConfig)
+internal/plugins/plugins.go  — Lua plugin loader + cached call wrappers
+internal/prompt/prompt.go    — hex_to_ansi, format_prompt with %u/%h/%d/%t/%T/%?/%$
+internal/prompt/prompt_test.go — Prompt tests
+internal/data/value.go       — Structured data type system (String/Int/Float/Bool/List/Record/Table)
+internal/data/table.go       — Table operations (filter, sort, select, parse condition)
+internal/data/value_test.go  — Value type tests
+internal/data/table_test.go  — Table operation tests
 plugins/                     — Lua plugin scripts
 .goreleaser.yaml             — GoReleaser config for cross-platform releases
 .github/workflows/release.yml — CI: builds deb/rpm/tar.gz/tar.zst for linux + macos
@@ -58,11 +65,13 @@ plugins/                     — Lua plugin scripts
 
 ### Tokenizer (`tokenize.go`)
 - Splits input into tokens at whitespace AND shell metacharacters (`;`, `|`, `&`, `>`, `<`)
+- Newlines (`\n`) treated as whitespace for multi-line input
 - Single quotes `'...'` — literal, no expansion
 - Double quotes `"..."` — `$VAR` expansion, `\\` escape
 - `$VAR` / `${VAR}` expansion via `os.Getenv`
 - `~` at token start expands to `$HOME`
 - Multi-char operators produced as single tokens: `&&`, `||`, `>>`, `&>`, `&>>`
+- `needsContinuation()` detects unclosed quotes/trailing `\` for multi-line input
 
 ### Pipeline & redirections (`pipeline.go`)
 - `cmd1 | cmd2` — stdout of cmd1 piped to stdin of cmd2
@@ -85,12 +94,59 @@ plugins/                     — Lua plugin scripts
 
 ### Tab completion (`completer.go`)
 - Implements `readline.AutoCompleter` interface
-- Command completion from a cached scan of `$PATH` (built once at first tab press)
+- Command completion from a cached scan of `$PATH` (built once at first tab press, **refreshed when `$PATH` changes**)
 - File path completion with `~` expansion
 - Directories get a trailing `/`
 
 ### Command timing
 - Commands taking >100ms print a dimmed duration to stderr
+
+### Built-in commands
+| Command | Description |
+|---------|-------------|
+| `cd` | Change directory (defaults to `$HOME`) |
+| `exit` / `quit` | Exit the shell |
+| `echo` | Display a line of text (`-n` suppresses newline) |
+| `pwd` | Print working directory |
+| `type` | Show whether a command is builtin, external, or not found |
+| `export` | Set environment variable (`export NAME=value`) |
+| `unset` | Unset environment variable |
+| `history` | Show command history (`history -c` to clear, `history N` for last N) |
+| `alias` | Define or display aliases |
+| `unalias` | Remove alias definitions (`unalias -a` removes all) |
+| `help` | List built-in commands with descriptions |
+
+### Alias expansion
+- Aliases defined via `alias name=value` are expanded **once** at the start of each command segment (after `|`, `;`, `&&`, `||`, `&`)
+- Expanded by re-tokenizing the alias value
+
+### Multi-line input
+- Lines ending with unescaped `\` or containing unclosed quotes prompt for continuation with `> `
+- Newlines in continuation lines are treated as whitespace by the tokenizer
+
+### Prompt specifiers
+| Specifier | Expands to |
+|-----------|------------|
+| `%u` | Username |
+| `%h` | Hostname |
+| `%d` | Current directory (with `~` for home) |
+| `%t` | Current time (HH:MM) |
+| `%T` | Current time (HH:MM:SS) |
+| `%?` | Last exit code |
+| `%$` | `#` for root, `$` otherwise |
+
+## Feature details (new)
+
+### Structured data pipeline
+- **Value types**: `StringValue`, `IntValue`, `FloatValue`, `BoolValue`, `ListValue`, `RecordValue`, `TableValue`
+- **Comparisons**: `==`, `!=`, `<`, `<=`, `>`, `>=`, `~=` (regex), `in` (list membership)
+- **Table operations**: `Filter(conditions)`, `SortBy(field, desc)`, `Select(columns)`
+- **Condition parsing**: `ParseCondition("field op value")` for `where`-style filters
+- `ParseValue(s)` auto-detects int/float/bool/string
+
+### Data files
+- `internal/data/value.go` — Value interface + all implementations
+- `internal/data/table.go` — Table with filter/sort/select + condition parser
 
 ## CI / Release
 
@@ -105,6 +161,7 @@ Creates a draft GitHub Release with all artifacts.
 ```sh
 go build ./cmd/bsh
 go vet ./...
+go test ./...
 ```
 
-No tests exist yet.
+Test files exist for `internal/shell` (tokenizer, pipeline) and `internal/prompt`.
