@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"bakshell/internal/config"
+	"bakshell/internal/data"
 	"bakshell/internal/plugins"
 	"bakshell/internal/prompt"
 
@@ -24,6 +25,7 @@ type Shell struct {
 	promptColor string
 	lastExit    int
 	aliases     map[string]string
+	undoTable   *data.TableValue // saved table state for undo
 }
 
 func New() (*Shell, error) {
@@ -215,7 +217,7 @@ var builtinNames = map[string]bool{
 	"cd": true, "exit": true, "quit": true, "echo": true,
 	"pwd": true, "type": true, "export": true, "unset": true,
 	"history": true, "help": true, "alias": true, "unalias": true,
-	"confirm": true,
+	"confirm": true, "trash": true, "undo": true,
 	"from-json": true, "from-csv": true, "to-json": true, "to-csv": true,
 	"where": true, "sort-by": true, "select": true,
 	"first": true, "last": true, "count": true, "uniq": true,

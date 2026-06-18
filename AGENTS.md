@@ -172,6 +172,8 @@ plugins/                     — Lua plugin scripts
 | `count [field...]` | Count rows, or count by groups |
 | `uniq [field...]` | Show unique rows |
 | `confirm [message]` | Prompt yes/no, exits 0 for yes |
+| `trash <file...>` | Move files to ~/.zencr/trash/ |
+| `undo` | Restore previous table state |
 
 ### Pipeline files
 - `internal/shell/pipeline.go` — `command` struct with `isData` flag, data handlers, `execDataPipeline`

@@ -603,6 +603,13 @@ func (s *Shell) execDataPipeline(cmds []command) int {
 
 	for i, cmd := range cmds {
 		if cmd.isData {
+			// Save undo state before transformation
+			if lastJSON != "" {
+				if tbl, err := data.FromJSON(lastJSON); err == nil {
+					s.undoTable = &tbl
+				}
+			}
+
 			// Determine stdin source
 			var stdinR io.Reader
 			if i == 0 {
@@ -637,8 +644,18 @@ func (s *Shell) execDataPipeline(cmds []command) int {
 				}
 			} else {
 				// Last command in pipeline — display output
-				if out != "" {
+				if out == "" {
+					continue
+				}
+				// For format commands, print raw. For transform commands, show table
+				if cmd.args[0] == "to-json" || cmd.args[0] == "to-csv" {
 					fmt.Println(out)
+				} else {
+					if tbl, err := data.FromJSON(out); err == nil {
+						fmt.Print(colorTable(tbl.String()))
+					} else {
+						fmt.Println(out)
+					}
 				}
 			}
 		} else {
@@ -749,6 +766,10 @@ func (s *Shell) execCommand(cmd command) int {
 		return s.execAlias(cmd.args[1:])
 	case "unalias":
 		return s.execUnalias(cmd.args[1:])
+	case "trash":
+		return s.execTrash(cmd.args[1:])
+	case "undo":
+		return s.execUndo(cmd.args[1:])
 	case "confirm":
 		return s.execConfirm(cmd.args[1:])
 	case "from-json", "from-csv", "to-json", "to-csv", "where", "sort-by", "select", "first", "last", "count", "uniq":
@@ -785,6 +806,8 @@ var builtins = map[string]string{
 	"alias":     "define or display aliases",
 	"unalias":   "remove alias definitions",
 	"confirm":   "prompt for confirmation, exits 0 for yes, 1 otherwise",
+	"trash":     "move files to trash (~/.zencr/trash/)",
+	"undo":      "restore the previous table state",
 	"from-json": "parse JSON into structured data",
 	"from-csv":  "parse CSV into structured data",
 	"to-json":   "convert structured data to JSON",
@@ -1004,6 +1027,67 @@ func (s *Shell) execConfirm(args []string) int {
 		return 0
 	}
 	return 1
+}
+
+func (s *Shell) execTrash(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "trash: usage: trash <file> [file...]\n")
+		return 1
+	}
+	trashDir := s.home + "/.zencr/trash"
+	if err := os.MkdirAll(trashDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "trash: %v\n", err)
+		return 1
+	}
+	for _, arg := range args {
+		base := arg
+		if idx := strings.LastIndex(base, "/"); idx >= 0 {
+			base = base[idx+1:]
+		}
+		target := trashDir + "/" + base
+		if _, err := os.Stat(target); err == nil {
+			for i := 1; ; i++ {
+				target = fmt.Sprintf("%s/%s.%d", trashDir, base, i)
+				if _, err := os.Stat(target); os.IsNotExist(err) {
+					break
+				}
+			}
+		}
+		if err := os.Rename(arg, target); err != nil {
+			fmt.Fprintf(os.Stderr, "trash: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(os.Stderr, "trash: moved %s to trash\n", arg)
+	}
+	return 0
+}
+
+func (s *Shell) execUndo(args []string) int {
+	if s.undoTable == nil {
+		fmt.Fprintf(os.Stderr, "undo: nothing to undo\n")
+		return 1
+	}
+	json, err := s.undoTable.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "undo: %v\n", err)
+		return 1
+	}
+	fmt.Println(json)
+	s.undoTable = nil
+	return 0
+}
+
+func colorTable(s string) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) < 2 {
+		return s
+	}
+	// Bold + underline header
+	header := "\033[1;37m" + lines[0] + "\033[0m"
+	// Dim separator
+	sep := "\033[2m" + lines[1] + "\033[0m"
+	rows := strings.Join(lines[2:], "\n")
+	return header + "\n" + sep + "\n" + rows + "\n"
 }
 
 func (s *Shell) buildCmd(cmd command) *exec.Cmd {
