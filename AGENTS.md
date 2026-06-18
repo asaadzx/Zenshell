@@ -147,6 +147,29 @@ plugins/                     — Lua plugin scripts
 ### Data files
 - `internal/data/value.go` — Value interface + all implementations
 - `internal/data/table.go` — Table with filter/sort/select + condition parser
+- `internal/data/format.go` — JSON/CSV serialization (ToJSON, FromJSON, ToCSV, FromCSV)
+
+### Data pipeline (shell integration)
+- Data commands: `from-json`, `from-csv`, `to-json`, `to-csv`, `where`, `sort-by`, `select`
+- JSON is the internal interchange format between data commands in a pipeline
+- Data commands can be chained: `from-csv data.csv | where age > 30 | sort-by name | to-json`
+- Mixed pipelines: `external-cmd | from-json | where ...` or `from-json ... | grep ...`
+- Data commands run sequentially within a pipeline (not concurrently like external processes)
+- Pipeline detection: `execPipeline` checks for `isData` flag on commands and routes to `execDataPipeline`
+
+### Data command reference
+| Command | Description |
+|---------|-------------|
+| `from-json [file]` | Parse JSON from file or stdin into data table |
+| `from-csv [file]` | Parse CSV from file or stdin into data table |
+| `to-json` | Convert data table to JSON output |
+| `to-csv` | Convert data table to CSV output |
+| `where <condition...>` | Filter rows by conditions (`"age > 30"`) |
+| `sort-by <field> [--desc]` | Sort rows by a field |
+| `select <column...>` | Keep only specified columns |
+
+### Pipeline files
+- `internal/shell/pipeline.go` — `command` struct with `isData` flag, data handlers, `execDataPipeline`
 
 ## CI / Release
 

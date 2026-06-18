@@ -2,9 +2,14 @@ package shell
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
+
+	"bakshell/internal/data"
 )
 
 type redirect struct {
@@ -15,8 +20,248 @@ type redirect struct {
 }
 
 type command struct {
-	args   []string
-	redirs []redirect
+	args     []string
+	redirs   []redirect
+	isData   bool
+	dataFn   func(args []string, stdin io.Reader) (string, int) // returns output, exit code
+}
+
+// isDataBuiltin returns true if name is a structured data command.
+func isDataBuiltin(name string) bool {
+	switch name {
+	case "where", "sort-by", "select", "from-json", "from-csv", "to-json", "to-csv":
+		return true
+	}
+	return false
+}
+
+// dataCommands maps data builtin names to their handler functions.
+func (s *Shell) getDataFn(name string) func(args []string, stdin io.Reader) (string, int) {
+	switch name {
+	case "from-json":
+		return s.handleFromJSON
+	case "from-csv":
+		return s.handleFromCSV
+	case "to-json":
+		return s.handleToJSON
+	case "to-csv":
+		return s.handleToCSV
+	case "where":
+		return s.handleWhere
+	case "sort-by":
+		return s.handleSortBy
+	case "select":
+		return s.handleSelect
+	}
+	return nil
+}
+
+// --- Data command handlers ---
+// Each reads TableValue from stdin (JSON), transforms, returns JSON string.
+
+func (s *Shell) handleFromJSON(args []string, stdin io.Reader) (string, int) {
+	var input string
+	if len(args) > 0 {
+		// Read from file
+		b, err := os.ReadFile(args[0])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "from-json: %v\n", err)
+			return "", 1
+		}
+		input = string(b)
+	} else {
+		b, err := io.ReadAll(stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "from-json: %v\n", err)
+			return "", 1
+		}
+		input = string(b)
+	}
+
+	tbl, err := data.FromJSON(input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "from-json: %v\n", err)
+		return "", 1
+	}
+	json, err := tbl.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "from-json: %v\n", err)
+		return "", 1
+	}
+	return json, 0
+}
+
+func (s *Shell) handleFromCSV(args []string, stdin io.Reader) (string, int) {
+	var input string
+	if len(args) > 0 {
+		b, err := os.ReadFile(args[0])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "from-csv: %v\n", err)
+			return "", 1
+		}
+		input = string(b)
+	} else {
+		b, err := io.ReadAll(stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "from-csv: %v\n", err)
+			return "", 1
+		}
+		input = string(b)
+	}
+
+	tbl, err := data.FromCSV(input)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "from-csv: %v\n", err)
+		return "", 1
+	}
+	json, err := tbl.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "from-csv: %v\n", err)
+		return "", 1
+	}
+	return json, 0
+}
+
+func (s *Shell) handleToJSON(args []string, stdin io.Reader) (string, int) {
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+		return "", 1
+	}
+	// Validate by parsing
+	tbl, err := data.FromJSON(string(b))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+		return "", 1
+	}
+	json, err := tbl.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "to-json: %v\n", err)
+		return "", 1
+	}
+	return json, 0
+}
+
+func (s *Shell) handleToCSV(args []string, stdin io.Reader) (string, int) {
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
+		return "", 1
+	}
+	tbl, err := data.FromJSON(string(b))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
+		return "", 1
+	}
+	csv, err := tbl.ToCSV()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "to-csv: %v\n", err)
+		return "", 1
+	}
+	return csv, 0
+}
+
+func (s *Shell) handleWhere(args []string, stdin io.Reader) (string, int) {
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "where: %v\n", err)
+		return "", 1
+	}
+	tbl, err := data.FromJSON(string(b))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "where: %v\n", err)
+		return "", 1
+	}
+
+	var conds []data.Condition
+	for _, arg := range args {
+		cond, err := data.ParseCondition(arg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "where: %v\n", err)
+			return "", 1
+		}
+		conds = append(conds, cond)
+	}
+
+	result, err := tbl.Filter(conds)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "where: %v\n", err)
+		return "", 1
+	}
+	json, err := result.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "where: %v\n", err)
+		return "", 1
+	}
+	return json, 0
+}
+
+func (s *Shell) handleSortBy(args []string, stdin io.Reader) (string, int) {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "sort-by: expected field name\n")
+		return "", 1
+	}
+
+	field := args[0]
+	desc := false
+	for _, a := range args[1:] {
+		if a == "--desc" || a == "-d" {
+			desc = true
+		}
+	}
+
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "sort-by: %v\n", err)
+		return "", 1
+	}
+	tbl, err := data.FromJSON(string(b))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "sort-by: %v\n", err)
+		return "", 1
+	}
+
+	result, err := tbl.SortBy(field, desc)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "sort-by: %v\n", err)
+		return "", 1
+	}
+	json, err := result.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "sort-by: %v\n", err)
+		return "", 1
+	}
+	return json, 0
+}
+
+func (s *Shell) handleSelect(args []string, stdin io.Reader) (string, int) {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "select: expected column names\n")
+		return "", 1
+	}
+
+	b, err := io.ReadAll(stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "select: %v\n", err)
+		return "", 1
+	}
+	tbl, err := data.FromJSON(string(b))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "select: %v\n", err)
+		return "", 1
+	}
+
+	result, err := tbl.Select(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "select: %v\n", err)
+		return "", 1
+	}
+	json, err := result.ToJSON()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "select: %v\n", err)
+		return "", 1
+	}
+	return json, 0
 }
 
 // parseSegment splits tokens at | to build a pipeline,
@@ -116,7 +361,11 @@ func parseCommand(tokens []string) command {
 			args = append(args, tok)
 		}
 	}
-	return command{args: args, redirs: redirs}
+	cmd := command{args: args, redirs: redirs}
+	if len(args) > 0 && isDataBuiltin(args[0]) {
+		cmd.isData = true
+	}
+	return cmd
 }
 
 // execPipeline runs a pipeline (cmds[0] | cmds[1] | ...) and returns the exit code
@@ -131,6 +380,24 @@ func (s *Shell) execPipeline(cmds []command) int {
 		return s.execCommand(cmds[0])
 	}
 
+	// Check if any command is a data command
+	hasData := false
+	for _, c := range cmds {
+		if c.isData {
+			hasData = true
+			break
+		}
+	}
+
+	if hasData {
+		return s.execDataPipeline(cmds)
+	}
+
+	return s.execFDPipeline(cmds)
+}
+
+// execFDPipeline runs an fd-based concurrent pipeline (existing behavior).
+func (s *Shell) execFDPipeline(cmds []command) int {
 	last := len(cmds) - 1
 	procs := make([]*exec.Cmd, len(cmds))
 	pipes := make([]*os.File, 0, last*2)
@@ -150,11 +417,11 @@ func (s *Shell) execPipeline(cmds []command) int {
 		if i == 0 {
 			c.Stdin = os.Stdin
 		} else {
-			c.Stdin = pipes[(i-1)*2] // read end of prev pipe
+			c.Stdin = pipes[(i-1)*2]
 		}
 
 		if i < last {
-			c.Stdout = pipes[i*2+1] // write end of this pipe
+			c.Stdout = pipes[i*2+1]
 		} else {
 			c.Stdout = os.Stdout
 		}
@@ -164,20 +431,21 @@ func (s *Shell) execPipeline(cmds []command) int {
 		procs[i] = c
 	}
 
-	// Start all processes
 	for _, c := range procs {
 		if err := c.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
+			if isCommandNotFound(err) {
+				fmt.Fprintf(os.Stderr, "%s: command not found\n", c.Args[0])
+			} else {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", c.Args[0], err)
+			}
 			return 127
 		}
 	}
 
-	// Close write ends in parent so readers see EOF
 	for i := 0; i < last; i++ {
 		pipes[i*2+1].Close()
 	}
 
-	// Wait for all processes
 	lastExit := 0
 	for _, c := range procs {
 		if err := c.Wait(); err != nil {
@@ -194,6 +462,144 @@ func (s *Shell) execPipeline(cmds []command) int {
 	return lastExit
 }
 
+// execDataPipeline runs a pipeline that contains data commands.
+// Commands run sequentially, passing JSON through pipes or directly.
+func (s *Shell) execDataPipeline(cmds []command) int {
+	last := len(cmds) - 1
+
+	// We'll set up fd pipes between segments. For external→data or data→external
+	// transitions, data is serialized as JSON through the fd pipe.
+	// For data→data transitions, we pass the string directly.
+
+	type pipeEnd struct {
+		r *os.File
+		w *os.File
+	}
+
+	pipes := make([]pipeEnd, last)
+	for i := 0; i < last; i++ {
+		r, w, err := os.Pipe()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "pipe:", err)
+			return 1
+		}
+		pipes[i] = pipeEnd{r, w}
+	}
+
+	var lastJSON string // holds JSON output from previous data command
+	var lastExit int
+
+	for i, cmd := range cmds {
+		if cmd.isData {
+			// Determine stdin source
+			var stdinR io.Reader
+			if i == 0 {
+				stdinR = os.Stdin
+			} else if lastJSON != "" {
+				stdinR = strings.NewReader(lastJSON)
+			} else {
+				stdinR = pipes[i-1].r
+			}
+
+			fn := s.getDataFn(cmd.args[0])
+			if fn == nil {
+				fmt.Fprintf(os.Stderr, "%s: internal error: no data handler\n", cmd.args[0])
+				return 1
+			}
+
+			out, code := fn(cmd.args[1:], stdinR)
+			lastExit = code
+			if code != 0 {
+				break
+			}
+
+			if i < last {
+				// Check if next cmd is also a data cmd
+				if cmds[i+1].isData {
+					lastJSON = out
+				} else {
+					// Write to pipe for external command
+					pipes[i].w.Write([]byte(out))
+					pipes[i].w.Close()
+					lastJSON = ""
+				}
+			} else {
+				// Last command in pipeline — display output
+				if out != "" {
+					fmt.Println(out)
+				}
+			}
+		} else {
+			// External command
+			c := s.buildCmd(cmd)
+
+			if i == 0 {
+				c.Stdin = os.Stdin
+			} else if lastJSON != "" {
+				r, w, err := os.Pipe()
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "pipe:", err)
+					return 1
+				}
+				w.Write([]byte(lastJSON))
+				w.Close()
+				c.Stdin = r
+				lastJSON = ""
+			} else {
+				c.Stdin = pipes[i-1].r
+			}
+
+			if i < last {
+				// If next cmd is data, capture stdout
+				if cmds[i+1].isData {
+					r, w, err := os.Pipe()
+					if err != nil {
+						fmt.Fprintln(os.Stderr, "pipe:", err)
+						return 1
+					}
+					pipes[i] = pipeEnd{r, w}
+					c.Stdout = pipes[i].w
+				} else {
+					c.Stdout = pipes[i].w
+				}
+			} else {
+				c.Stdout = os.Stdout
+			}
+
+			c.Stderr = os.Stderr
+			applyRedirs(c, cmd.redirs)
+
+			if err := c.Run(); err != nil {
+				if exitErr, ok := err.(*exec.ExitError); ok {
+					lastExit = exitErr.ExitCode()
+				} else {
+					if isCommandNotFound(err) {
+						fmt.Fprintf(os.Stderr, "%s: command not found\n", c.Args[0])
+					} else {
+						fmt.Fprintf(os.Stderr, "%s: %v\n", c.Args[0], err)
+					}
+					lastExit = 127
+				}
+			} else {
+				lastExit = 0
+			}
+
+			if i < last {
+				pipes[i].w.Close()
+				// If next cmd is a data cmd, read pipe output now
+				if cmds[i+1].isData {
+					b, err := io.ReadAll(pipes[i].r)
+					if err == nil {
+						lastJSON = string(b)
+					}
+				}
+			}
+		}
+	}
+
+	return lastExit
+}
+
 // execCommand runs a single command with redirections (no pipe).
 func (s *Shell) execCommand(cmd command) int {
 	if len(cmd.args) == 0 {
@@ -202,18 +608,46 @@ func (s *Shell) execCommand(cmd command) int {
 
 	switch cmd.args[0] {
 	case "cd":
-		target := s.home
-		if len(cmd.args) > 1 {
-			target = strings.Join(cmd.args[1:], " ")
-		}
-		if err := os.Chdir(target); err != nil {
-			fmt.Fprintf(os.Stderr, "cd: %v\n", err)
-			return 1
-		}
-		return 0
+		return s.execCD(cmd.args[1:])
 	case "exit", "quit":
 		fmt.Println("Goodbye!")
 		os.Exit(0)
+		return 0
+	case "echo":
+		return s.execEcho(cmd.args[1:])
+	case "pwd":
+		pwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "pwd: %v\n", err)
+			return 1
+		}
+		fmt.Println(pwd)
+		return 0
+	case "type":
+		return s.execType(cmd.args[1:])
+	case "export":
+		return s.execExport(cmd.args[1:])
+	case "unset":
+		return s.execUnset(cmd.args[1:])
+	case "history":
+		return s.execHistory(cmd.args[1:])
+	case "help":
+		return s.execHelp(cmd.args[1:])
+	case "alias":
+		return s.execAlias(cmd.args[1:])
+	case "unalias":
+		return s.execUnalias(cmd.args[1:])
+	case "from-json", "from-csv", "to-json", "to-csv", "where", "sort-by", "select":
+		fn := s.getDataFn(cmd.args[0])
+		if fn == nil {
+			fmt.Fprintf(os.Stderr, "%s: internal error\n", cmd.args[0])
+			return 1
+		}
+		out, code := fn(cmd.args[1:], os.Stdin)
+		if out != "" {
+			fmt.Println(out)
+		}
+		return code
 	}
 
 	if s.plugins.ExecuteCommand(cmd.args) {
@@ -223,11 +657,241 @@ func (s *Shell) execCommand(cmd command) int {
 	return s.execExternalCmd(cmd)
 }
 
+var builtins = map[string]string{
+	"cd":       "change the current directory",
+	"exit":     "exit the shell",
+	"quit":     "exit the shell",
+	"echo":     "display a line of text",
+	"pwd":      "print the current working directory",
+	"type":     "display information about command type",
+	"export":   "set an environment variable",
+	"unset":    "unset an environment variable",
+	"history":  "display or clear the command history",
+	"help":     "display information about built-in commands",
+	"alias":    "define or display aliases",
+	"unalias":  "remove alias definitions",
+	"from-json": "parse JSON into structured data",
+	"from-csv":  "parse CSV into structured data",
+	"to-json":   "convert structured data to JSON",
+	"to-csv":    "convert structured data to CSV",
+	"where":     "filter structured data rows by conditions",
+	"sort-by":   "sort structured data by a field",
+	"select":    "select specific columns from structured data",
+}
+
+func (s *Shell) execCD(args []string) int {
+	target := s.home
+	if len(args) > 0 {
+		target = strings.Join(args, " ")
+	}
+	if err := os.Chdir(target); err != nil {
+		fmt.Fprintf(os.Stderr, "cd: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+func (s *Shell) execEcho(args []string) int {
+	noNewline := false
+	parts := args
+	if len(parts) > 0 && parts[0] == "-n" {
+		noNewline = true
+		parts = parts[1:]
+	}
+	out := strings.Join(parts, " ")
+	if noNewline {
+		fmt.Print(out)
+	} else {
+		fmt.Println(out)
+	}
+	return 0
+}
+
+func (s *Shell) execType(args []string) int {
+	if len(args) == 0 {
+		return 0
+	}
+	for _, name := range args {
+		if desc, ok := builtins[name]; ok {
+			fmt.Printf("%s is a shell built-in (%s)\n", name, desc)
+			continue
+		}
+		path, err := exec.LookPath(name)
+		if err != nil {
+			fmt.Printf("%s: not found\n", name)
+		} else {
+			fmt.Printf("%s is %s\n", name, path)
+		}
+	}
+	return 0
+}
+
+func (s *Shell) execExport(args []string) int {
+	if len(args) == 0 {
+		for _, e := range os.Environ() {
+			fmt.Println(e)
+		}
+		return 0
+	}
+	for _, arg := range args {
+		k, v, ok := strings.Cut(arg, "=")
+		if !ok {
+			// export NAME (mark for child processes — already in env, no-op)
+			continue
+		}
+		if err := os.Setenv(k, v); err != nil {
+			fmt.Fprintf(os.Stderr, "export: %v\n", err)
+			return 1
+		}
+	}
+	return 0
+}
+
+func (s *Shell) execUnset(args []string) int {
+	for _, name := range args {
+		if err := os.Unsetenv(name); err != nil {
+			fmt.Fprintf(os.Stderr, "unset: %v\n", err)
+			return 1
+		}
+	}
+	return 0
+}
+
+func (s *Shell) execHistory(args []string) int {
+	// Handle -c flag (clear)
+	for _, a := range args {
+		if a == "-c" {
+			histPath := s.home + "/.zencr/history"
+			if err := os.WriteFile(histPath, []byte{}, 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "history: %v\n", err)
+				return 1
+			}
+			return 0
+		}
+	}
+
+	// Handle numeric arg (show last N)
+	var limit int
+	for _, a := range args {
+		if n, err := strconv.Atoi(a); err == nil {
+			limit = n
+			break
+		}
+	}
+
+	histPath := s.home + "/.zencr/history"
+	data, err := os.ReadFile(histPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0
+		}
+		fmt.Fprintf(os.Stderr, "history: %v\n", err)
+		return 1
+	}
+
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	start := 0
+	if limit > 0 && limit < len(lines) {
+		start = len(lines) - limit
+	}
+	for i, line := range lines[start:] {
+		fmt.Printf("%5d  %s\n", start+i+1, line)
+	}
+	return 0
+}
+
+func (s *Shell) execHelp(args []string) int {
+	if len(args) > 0 {
+		for _, name := range args {
+			if desc, ok := builtins[name]; ok {
+				fmt.Printf("%s - %s\n", name, desc)
+			} else {
+				fmt.Printf("help: no such built-in: %s\n", name)
+			}
+		}
+		return 0
+	}
+
+	names := make([]string, 0, len(builtins))
+	for name := range builtins {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	fmt.Println("BakShell built-in commands:")
+	for _, name := range names {
+		fmt.Printf("  %-10s %s\n", name, builtins[name])
+	}
+	return 0
+}
+
+func (s *Shell) execAlias(args []string) int {
+	if len(args) == 0 {
+		// List all aliases
+		names := make([]string, 0, len(s.aliases))
+		for name := range s.aliases {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			fmt.Printf("alias %s='%s'\n", name, s.aliases[name])
+		}
+		return 0
+	}
+
+	for _, arg := range args {
+		k, v, ok := strings.Cut(arg, "=")
+		if !ok {
+			// Show single alias
+			if val, exists := s.aliases[arg]; exists {
+				fmt.Printf("alias %s='%s'\n", arg, val)
+			}
+			continue
+		}
+		// Strip surrounding quotes if present
+		if len(v) >= 2 && ((v[0] == '\'' && v[len(v)-1] == '\'') || (v[0] == '"' && v[len(v)-1] == '"')) {
+			v = v[1 : len(v)-1]
+		}
+		s.aliases[k] = v
+	}
+	return 0
+}
+
+func (s *Shell) execUnalias(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "unalias: usage: unalias [-a] name [name ...]\n")
+		return 1
+	}
+	for _, a := range args {
+		if a == "-a" {
+			s.aliases = make(map[string]string)
+			return 0
+		}
+		delete(s.aliases, a)
+	}
+	return 0
+}
+
 func (s *Shell) buildCmd(cmd command) *exec.Cmd {
 	return exec.Command(cmd.args[0], cmd.args[1:]...)
 }
 
+func isCommandNotFound(err error) bool {
+	if err == exec.ErrNotFound {
+		return true
+	}
+	if e, ok := err.(*exec.Error); ok && e.Err == exec.ErrNotFound {
+		return true
+	}
+	return false
+}
+
 func (s *Shell) execExternalCmd(cmd command) int {
+	if _, err := exec.LookPath(cmd.args[0]); err != nil {
+		fmt.Fprintf(os.Stderr, "%s: command not found\n", cmd.args[0])
+		return 127
+	}
+
 	c := s.buildCmd(cmd)
 
 	c.Stdin = os.Stdin
@@ -240,7 +904,11 @@ func (s *Shell) execExternalCmd(cmd command) int {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return exitErr.ExitCode()
 		}
-		fmt.Fprintf(os.Stderr, "%s: %v\n", cmd.args[0], err)
+		if isCommandNotFound(err) {
+			fmt.Fprintf(os.Stderr, "%s: command not found\n", cmd.args[0])
+		} else {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", cmd.args[0], err)
+		}
 		return 127
 	}
 	return 0
