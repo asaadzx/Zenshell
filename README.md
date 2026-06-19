@@ -8,7 +8,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go" alt="Go version"/>
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License"/>
+  <img src="https://img.shields.io/badge/license-GPLv3-blue" alt="License"/>
   <img src="https://img.shields.io/badge/build-static-brightgreen" alt="Build"/>
   <img src="https://img.shields.io/badge/baklava-sweet-ff69b4" alt="Baklava"/>
 </p>
@@ -166,4 +166,12 @@ Push a `v*` tag to trigger CI — builds `.tar.gz`, `.deb`, `.rpm`, `.tar.zst` f
 
 ## License
 
-MIT
+This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+
+GNU GPLv3 means:
+- ✅ Free to use, modify, and distribute
+- ✅ Must preserve license and copyright notices
+- ✅ Derivative works must also be GPLv3
+- ✅ Source code must be made available to users
+
+For more information, see [https://www.gnu.org/licenses/gpl-3.0.html](https://www.gnu.org/licenses/gpl-3.0.html)
